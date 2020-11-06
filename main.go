@@ -6,17 +6,18 @@ import (
 	"golang.org/x/crypto/ssh"
 	"log"
 	"os/exec"
+	"strconv"
 )
 
-var suitable_answers = []string{"bogus password", "021021"}
+var suitable_answers = []string{"bogus password", ""}
 var pwIdx = 0
 
-func RunCommand(){
+func RunCommand() {
 	config := &ssh.ClientConfig{
 		User: "aicam",
 		Auth: []ssh.AuthMethod{
 			ssh.KeyboardInteractive(Challenge),
-			ssh.Password("021021"),
+			ssh.Password(""),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
@@ -48,16 +49,12 @@ func Challenge(user, instruction string, questions []string, echos []bool) (answ
 	return answers, nil
 }
 
-func getPass() (string, error) {
-	return "021021", nil
-}
-
-func CreateVM(){
+func CreateVM() {
 	var b, berr bytes.Buffer
-	cmd := &exec.Cmd{Path:"/home/ali/vm_servers/vm_scripts/create_vm.sh",
-		Args:[]string{"", "vm1", "Ubuntu_64", "1024", "10000", "3393", "/home/ali/Downloads/ubuntu/u20.iso", "2222"},
-	Stdout: &b,
-	Stderr: &berr}
+	cmd := &exec.Cmd{Path: "/home/ali/vm_servers/vm_scripts/create_vm.sh",
+		Args:   []string{"", "vm1", "Ubuntu_64", "1024", "10000", "3393", "/home/ali/Downloads/ubuntu/u20.iso", "2222"},
+		Stdout: &b,
+		Stderr: &berr}
 
 	if err := cmd.Run(); err != nil {
 		log.Fatal("Error :", berr.String())
@@ -85,9 +82,20 @@ func StartVM(vmname string) string {
 	return bout.String()
 }
 
-func StopVM(vmname string) string {
+func StopVM(vmname string) (string, string) {
+	var bout, berr bytes.Buffer
+	cmd := exec.Command("vboxmanage", "controlvm", vmname, "poweroff", "soft")
+	cmd.Stdout = &bout
+	cmd.Stderr = &berr
+	if err := cmd.Run(); err != nil {
+		return "", berr.String()
+	}
+	return bout.String(), ""
+}
+
+func RemoveVM(vmname string) string {
 	var bout bytes.Buffer
-	cmd := exec.Command("vboxmanage", "startvm", vmname, "-type", "headless")
+	cmd := exec.Command("vboxmanage", "unregistervm", vmname, "--delete")
 	cmd.Stdout = &bout
 	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
@@ -95,7 +103,22 @@ func StopVM(vmname string) string {
 	return bout.String()
 }
 
+func ChangeVMProperties(vmname string, RAM int, CPU int) string {
+	StopVM(vmname)
+	var bout, berr bytes.Buffer
+	cmd := exec.Command("vboxmanage", "modifyvm", vmname, "--cpus", strconv.Itoa(CPU), "--memory", strconv.Itoa(RAM))
+	cmd.Stdout = &bout
+	cmd.Stderr = &berr
+	log.Println(cmd.String())
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err, berr.String())
+	}
+	StartVM(vmname)
+	return bout.String()
+}
 
 func main() {
-
+	log.Print(StopVM("vm1"))
+	//log.Print(ChangeVMProperties("vm1", 1024, 1))
+	//log.Print(ChangeVMProperties("vm1", 2048, 1))
 }
